@@ -212,6 +212,17 @@
 
   .required { color: #EC1C24; }
 
+  .field input.invalid,
+  .field select.invalid,
+  .field textarea.invalid { border-color: #EC1C24 !important; background: #FFF5F5; }
+  .field-error { color: #EC1C24; font-size: 12px; font-weight: 700; margin-top: 5px; }
+  .group-error {
+    color: #B91C1C; font-size: 13px; font-weight: 600;
+    margin-bottom: 10px; padding: 8px 12px;
+    background: #FEF2F2; border-radius: 6px; border: 1.5px solid #FECACA;
+  }
+  .skill-item.invalid-skill { border-color: #EC1C24 !important; background: #FFF5F5; }
+
   .summary-card {
     border: 1.5px solid #E8E9ED; border-radius: 10px; border-left: 4px solid #EC1C24;
     background: #F4F5F7; padding: 1.25rem; margin-bottom: 1rem; font-size: 14px; line-height: 1.7;
@@ -354,7 +365,7 @@
 
     <div class="btn-row">
       <button class="btn-back" onclick="goTo(2)">← Назад</button>
-      <button class="btn-primary" onclick="if(selectedCats.size===0){alert('Моля, избери поне една посока.');}else{goTo(4);}">Напред →</button>
+      <button class="btn-primary" onclick="goTo(4)">Напред →</button>
     </div>
   </div>
 
@@ -639,7 +650,99 @@ document.addEventListener('change', e => {
 
 let currentStep = 1;
 
+// ── Validation ────────────────────────────────────────────────────────────────
+
+function clearErrors() {
+  document.querySelectorAll('.field-error, .group-error').forEach(e => e.remove());
+  document.querySelectorAll('.invalid').forEach(e => e.classList.remove('invalid'));
+  document.querySelectorAll('.invalid-skill').forEach(e => e.classList.remove('invalid-skill'));
+}
+
+let _firstErrorEl = null;
+
+function markError(el, msg) {
+  if (!_firstErrorEl) _firstErrorEl = el;
+  el.classList.add('invalid');
+  const err = document.createElement('div');
+  err.className = 'field-error';
+  err.textContent = msg;
+  el.parentNode.appendChild(err);
+}
+
+function showGroupError(container, msg) {
+  if (!_firstErrorEl) _firstErrorEl = container;
+  const err = document.createElement('div');
+  err.className = 'group-error';
+  err.textContent = msg;
+  container.before(err);
+}
+
+function validate(step) {
+  clearErrors();
+  _firstErrorEl = null;
+  let ok = true;
+
+  if (step === 1) {
+    const name   = document.getElementById('name');
+    const grade  = document.getElementById('grade');
+    const school = document.getElementById('school');
+    const future = document.getElementById('future');
+    if (!name.value.trim())  { markError(name,   'Полето е задължително'); ok = false; }
+    if (!grade.value.trim()) { markError(grade,  'Полето е задължително'); ok = false; }
+    if (!school.value)       { markError(school, 'Моля, избери училище');  ok = false; }
+    if (!future.value.trim()){ markError(future, 'Полето е задължително'); ok = false; }
+  }
+
+  if (step === 2) {
+    const unrated = skills.filter(s => !skillRatings[s.id]);
+    if (unrated.length > 0) {
+      unrated.forEach(s => {
+        const item = document.querySelector(`#stars-${s.id}`).closest('.skill-item');
+        item.classList.add('invalid-skill');
+        if (!_firstErrorEl) _firstErrorEl = item;
+      });
+      showGroupError(document.getElementById('skill-grid'), 'Моля, оцени всички умения преди да продължиш');
+      ok = false;
+    }
+  }
+
+  if (step === 3) {
+    if (selectedCats.size === 0) {
+      showGroupError(document.getElementById('cat-cards'), 'Моля, избери поне една посока');
+      ok = false;
+    }
+  }
+
+  if (step === 4) {
+    const hasCatWithProjects = selectedCats.has('life') || selectedCats.has('company');
+    if (hasCatWithProjects && selectedProjects.size === 0) {
+      showGroupError(document.getElementById('specific-cards'), 'Моля, избери поне един проект от списъка');
+      ok = false;
+    }
+    if (selectedCats.has('own')) {
+      const idea = document.getElementById('own-idea');
+      if (idea && !idea.value.trim()) { markError(idea, 'Моля, опиши идеята си'); ok = false; }
+    }
+  }
+
+  if (step === 5) {
+    const role = document.querySelector('input[name="role"]:checked');
+    if (!role) {
+      showGroupError(document.getElementById('role-group'), 'Моля, избери предпочитана роля');
+      ok = false;
+    }
+  }
+
+  if (_firstErrorEl) {
+    _firstErrorEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+  return ok;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 function goTo(n) {
+  if (n > currentStep && !validate(currentStep)) return;
   if (n === 4) saveOwnIdeaState();
   currentStep = n;
   document.querySelectorAll('.step').forEach(s => s.classList.remove('active'));
@@ -666,7 +769,6 @@ function goTo(n) {
 }
 
 function headerNext() {
-  if (currentStep === 3 && selectedCats.size === 0) { alert('Моля, избери поне една посока.'); return; }
   if (currentStep === 5) finish();
   else if (currentStep < 6) goTo(currentStep + 1);
 }
@@ -680,6 +782,7 @@ window.addEventListener('beforeunload', function(e) {
 });
 
 async function finish() {
+  if (!validate(5)) return;
   const summary = buildSummary();
   document.getElementById('summary-output').innerHTML = summary.html;
   goTo(6);
