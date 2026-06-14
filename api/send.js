@@ -23,17 +23,16 @@ module.exports = async function handler(req, res) {
       redirect: "manual",
     });
 
-    let targetUrl = sheetUrl;
+    // doPost() already ran when we POSTed to /exec above.
+    // The 302 redirect points to Google's echo URL which serves the response — fetch it with GET.
+    let response;
     if (probe.status >= 300 && probe.status < 400) {
-      targetUrl = probe.headers.get("location") || sheetUrl;
-      console.log("Following redirect to:", targetUrl);
+      const echoUrl = probe.headers.get("location");
+      console.log("Following redirect to:", echoUrl);
+      response = await fetch(echoUrl, { method: "GET" });
+    } else {
+      response = probe;
     }
-
-    const response = await fetch(targetUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body,
-    });
 
     const text = await response.text();
     console.log("Google response status:", response.status, "body:", text.slice(0, 200));
